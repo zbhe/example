@@ -2,16 +2,16 @@
 #include <iostream>
 #include <memory>
 #include <utility>
-#include "asio.hpp"
+#include <boost/asio.hpp>
 #include <functional>
 #include <type_traits>
-
+using namespace boost;
 using asio::ip::tcp;
 tcp::acceptor::non_blocking_io noblockcmd(true);
 void do_accept(tcp::acceptor& acceptor)
 {
 	auto socket = std::make_shared<tcp::socket>(acceptor.get_io_service());
-	std::error_code errcode;
+	system::error_code errcode;
 	socket->io_control(noblockcmd, errcode);
 	acceptor.async_accept(*socket, [&acceptor, socket](std::error_code err){
 				std::cout << err << " new connection\n";
@@ -26,7 +26,7 @@ int main()
 	//std::cout << std::is_object<decltype(nf)>::value << std::endl;
 	asio::io_service io_service;
 	tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 2358));
-	std::error_code errcode;
+	system::error_code errcode;
 	acceptor.io_control(noblockcmd, errcode);
 	if( errcode ){
 		//todo error msg
