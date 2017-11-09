@@ -39,6 +39,6 @@ int main()
 	C c{2};
 	decltype(F()) v = F();
 	//static_assert(is_same<decltype(v), C&>::value, "type==");
-	Type<decltype(F())> t;
+	//Type<decltype(F())> t;
 	return 0;
 }

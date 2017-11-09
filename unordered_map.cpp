@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <string.h>
 int main()
 {
 	std::unordered_map<std::string, int> Map;
