@@ -1,3 +1,6 @@
+#include <vector>
+#include <list>
+#include <string>
 #include <iostream>
 #include <functional>
 
@@ -17,6 +20,10 @@ template <class FUNCT, class... Args> void Call(FUNCT Func, Args... Paras)
 {
 	(void)std::initializer_list<int>{(Func(Paras), 0)...};
 }
+
+template < template<typename T, typename A = std::allocator<T> > class C, typename T > struct Container {
+	C<T> c;
+};
 
 int Sum(int x, int y)
 {
@@ -40,5 +47,7 @@ int main()
 		}
 	);
 	Call(print, 32,343,25,345,65,7,6887,98,5425,214,9889,54,42);
+	auto Vector = Container<std::vector, int>();
+	auto List = Container<std::list, std::string>();
 	return 0;
 }
