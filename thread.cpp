@@ -16,12 +16,17 @@ template<typename T> void Inc(T& C)
 }
 int main(){
 	std::vector<std::thread> VThread;
-	VThread.push_back( std::thread{Inc<int>, &Count} );
-	/*VThread.emplace_back( std::thread{Inc<int>, &Count} );
+	VThread.emplace_back( std::thread{Inc<int>, std::ref(Count)} );
+	VThread.emplace_back( std::thread{Inc<int>, std::ref(Count)} );
+	VThread.emplace_back( std::thread{Inc<int>, std::ref(Count)} );
+	VThread.emplace_back( std::thread{Inc<int>, std::ref(Count)} );
+	VThread.emplace_back( std::thread{Inc<int>, std::ref(Count)} );
 
-	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, &ACount} );
-	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, &ACount} );
-	*/
+	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, std::ref(ACount)} );
+	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, std::ref(ACount)} );
+	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, std::ref(ACount)} );
+	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, std::ref(ACount)} );
+	VThread.emplace_back( std::thread{Inc<decltype(ACount)>, std::ref(ACount)} );
 	for( auto& T : VThread){
 		T.join();
 	}
