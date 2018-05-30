@@ -7,6 +7,27 @@
 
 int Count = 0;
 std::atomic<int> ACount{0};
+class T
+{
+	public:
+		int value;
+		T(int x):value(x){
+			std::cout << "construct..." << x << std::endl;
+		}
+		T(const T& t) = delete;
+		/*
+		T(const T& t){
+			value = t.value;
+			std::cout << "copy construct..." << t.value << std::endl;
+		}
+		*/
+		T(T&& t){
+			value = t.value;
+			std::cout << "move construct..." << t.value << std::endl;
+		}
+};
+
+T t = 1;
 
 template<typename T> void Inc(T& C)
 {
