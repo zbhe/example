@@ -89,13 +89,13 @@ void RunServer(int port)
 	start_service(listensocket);
 	io_service.run();
 }
-void RunClient(int port)
+void RunClient(const std::string& host, int port)
 {
 	asio::io_service io_service;
 	udp::socket clientsocket(io_service, udp::v4());
 	clientsocket.set_option(asio::socket_base::reuse_address(true));
 	system::error_code ec;
-	udp::endpoint remotepoint(asio::ip::address::from_string("10.254.52.64"), port);
+	udp::endpoint remotepoint(asio::ip::address::from_string("host"), port);
 	//std::cout << "remotepoint:" << remotepoint.address().to_string() << ":" << remotepoint.port() << std::endl;
 	clientsocket.connect(remotepoint, ec);
 	if( ec ){
@@ -103,36 +103,35 @@ void RunClient(int port)
 		return;
 	}
 	std::string s = "hello world";
-	size_t len = clientsocket.send(asio::buffer(s), 0, ec);
+	size_t len = clientsocket.send(asio::buffer(&s[0], s.size()), 0, ec);
 	if( ec ){
 		std::cerr << __LINE__ << "  send error:" << ec.message() << std::endl;
 		return;
 	}
-	std::string str(1024, 0);
-	len =  clientsocket.receive(asio::buffer(str), 0, ec);
+	std::array<char, 1024> buf;
+	len =  clientsocket.receive(asio::buffer(buf), 0, ec);
 	if( ec ){
 		std::cerr << __LINE__ << " receive error:" << ec.message() << std::endl;
 		return;
 	}
-	std::cout << "receive first data from server:" << str << std::endl;
+	std::cout << "receive first data from server:" << buf.data() << std::endl;
 	while(1){
 		std::cout << "input:";
-		str.assign(1024, 0);
-		std::cin.getline(&str[0], str.size());
-		clientsocket.send(asio::buffer(str), 0, ec);
+		buf.fill(0);
+		std::cin.getline(buf.data(), buf.size());
+		clientsocket.send(asio::buffer(buf.data(), strlen(buf.data())), 0, ec);
 		if( ec ){
 			std::cerr << __LINE__ << " send error:" << ec.message() << std::endl;
 			return;
 		}
-		str.assign(1024, 0);
-		clientsocket.receive(asio::buffer(str), 0, ec);
+		buf.fill(0);
+		clientsocket.receive(asio::buffer(buf), 0, ec);
 		if( ec ){
 			std::cerr << __LINE__ << " receive error:" << ec.message() << std::endl;
 			return;
 		}
-		std::cout << "receive:" << str << std::endl;
+		std::cout << "receive:" << buf.data() << std::endl;
 	}
-	//io_service.run();
 }
 
 int main(int argc, char** argv)
@@ -140,7 +139,8 @@ int main(int argc, char** argv)
 	char c;
 	MODE RunMode = MODE::CLIENT;
 	int port = 0;
-	while( (c = getopt(argc, argv, "csp:")) != -1 ){
+	std::string host = "127.0.0.1";
+	while( (c = getopt(argc, argv, "csp:h:")) != -1 ){
 		switch(c){
 			case 's':
 				RunMode = MODE::SERVER;
@@ -151,6 +151,8 @@ int main(int argc, char** argv)
 			case 'p':
 				port = lexical_cast<int>(optarg);
 				break;
+			case 'h':
+				host = lexical_cast<std::string>(optarg);
 			case '?':
 			default:
 				std::cout << argv[0] << " -[sc] -p port\n";
@@ -161,10 +163,11 @@ int main(int argc, char** argv)
 		std::cerr << "error port " << port << std::endl;
 		return 0;
 	}
+	std::cout << host << ":" << port << std::endl;
 	if( RunMode == MODE::SERVER ){
 		RunServer(port);
 	}else{
-		RunClient(port);
+		RunClient(host, port);
 	}
 	return 0;
 }
