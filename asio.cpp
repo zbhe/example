@@ -95,7 +95,7 @@ void RunClient(const std::string& host, int port)
 	udp::socket clientsocket(io_service, udp::v4());
 	clientsocket.set_option(asio::socket_base::reuse_address(true));
 	system::error_code ec;
-	udp::endpoint remotepoint(asio::ip::address::from_string("host"), port);
+	udp::endpoint remotepoint(asio::ip::address::from_string(host), port);
 	//std::cout << "remotepoint:" << remotepoint.address().to_string() << ":" << remotepoint.port() << std::endl;
 	clientsocket.connect(remotepoint, ec);
 	if( ec ){
