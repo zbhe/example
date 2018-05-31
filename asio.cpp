@@ -153,6 +153,7 @@ int main(int argc, char** argv)
 				break;
 			case 'h':
 				host = lexical_cast<std::string>(optarg);
+				break;
 			case '?':
 			default:
 				std::cout << argv[0] << " -[sc] -p port\n";
