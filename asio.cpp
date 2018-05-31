@@ -7,37 +7,62 @@
 #include <functional>
 #include <type_traits>
 #include <unistd.h>
+#include <set>
+#include <thread>
 
 using namespace boost;
 using boost::asio::ip::udp;
 enum class MODE{CLIENT, SERVER};
 
+struct connection;
+void login(const std::shared_ptr<connection>& con);
+void logout(const std::shared_ptr<connection>& con);
+void broadcast(const char* data, size_t len);
+
 struct connection:public std::enable_shared_from_this<connection>{
+	std::string name;
 	asio::io_service& service;
-	std::array<char, 1024> buff;
 	udp::socket s;
+	udp::endpoint local_endpoint;
+	udp::endpoint remote_endpoint;
 	~connection()
 	{
 		std::cout << __LINE__ << " ~connection\n";
 	}
-	connection(asio::io_service& ios, const udp::endpoint& bindpoint, const udp::endpoint& peerpoint):service(ios), s(ios)
+	connection(const std::string& cname, asio::io_service& ios,
+			const udp::endpoint& bindpoint, const udp::endpoint& peerpoint)
+		:name(cname), service(ios), s(ios), local_endpoint(bindpoint), remote_endpoint(peerpoint)
 	{
-		s.open(udp::v4());
-		s.set_option(asio::socket_base::reuse_address(true));
-		s.bind(bindpoint);
-		s.connect(peerpoint);
 	}
-	void start()
+	bool start()
 	{
+#define CHECK_ERROR(msg, ec)\
+	do{\
+		if( (ec) ){\
+			std::cerr << __LINE__ << " " << msg << " error:" << ec.message() << std::endl;\
+			return false;\
+		}\
+	}while(0)
+		system::error_code ec;
+		s.open(udp::v4(), ec);
+		CHECK_ERROR("open", ec);
+		s.set_option(asio::socket_base::reuse_address(true), ec);
+		CHECK_ERROR("set_option", ec);
+		s.bind(local_endpoint, ec);
+		CHECK_ERROR("bind", ec);
+		s.connect(remote_endpoint, ec);
+		CHECK_ERROR("connect", ec);
 		auto strptr = std::make_shared<std::string>("connected");
 		s.async_send(asio::buffer(*strptr, strptr->size()),
 				[strptr, self=shared_from_this()](const system::error_code& ec, size_t len){
 			if( ec ){
 				std::cerr << __LINE__ << " init connection failed:" << ec.message() << std::endl;
+				logout(self);
 			}else{
 				self->recvdata();
 			}
 		});
+		return true;
 	}
 	void senddata(const char* buf, size_t len)
 	{
@@ -47,38 +72,68 @@ struct connection:public std::enable_shared_from_this<connection>{
 				[self=shared_from_this(), bufptr](const system::error_code& ec, size_t len){
 			if( ec ){
 				std::cerr << __LINE__ << " senddata failed:" << ec.message() << std::endl;
+				logout(self);
 			}
 		});
 	}
 	void recvdata()
 	{
-		s.async_receive(asio::buffer(buff.data(), buff.size()),
-				[self=shared_from_this()](const system::error_code& ec, size_t len){
+		auto bufptr = std::make_shared<std::array<char, 1024> >();
+		s.async_receive(asio::buffer(bufptr->data(), bufptr->size()),
+				[self=shared_from_this(), bufptr](const system::error_code& ec, size_t len){
 			if( ec ){
 				std::cerr << __LINE__ << " recvdata failed:" << ec.message() << std::endl;
+				logout(self);
 				return;
 			}
-			self->senddata(self->buff.data(), len);
+			std::string msg{self->name};
+			msg.append(":");
+			msg.append(bufptr->data(), len);
+			broadcast(msg.data(), msg.size());
 			self->recvdata();
 		});
 	}
 };
 
+std::set<std::shared_ptr<connection>> allconnections;
+void login(const std::shared_ptr<connection>& con)
+{
+	allconnections.insert(con);
+}
+void logout(const std::shared_ptr<connection>& con)
+{
+	allconnections.erase(con);
+}
+
+void broadcast(const char* data, size_t len)
+{
+	for(auto& con : allconnections){
+		con->senddata(data, len);
+	}
+}
+
 void start_service(udp::socket& s)
 {
-	auto dataptr = std::make_shared<std::array<char, 1024>>();
+	auto nameptr = std::make_shared<std::string>(250, 0);
 	auto endptr = std::make_shared<udp::endpoint>();
-	s.async_receive_from(asio::buffer(*dataptr, dataptr->size()), *endptr,
-				[&s, dataptr, endptr](const system::error_code& ec, size_t len){
+	s.async_receive_from(asio::buffer(const_cast<char*>(nameptr->data()), nameptr->size()), *endptr,
+				[&s, nameptr, endptr](const system::error_code& ec, size_t len){
+		start_service(s);
 		if( ec ){
 			std::cerr << __LINE__ << " error:" << ec << std::endl;
 			return;
 		}
-		std::cout << __LINE__ << " receive:" << std::string(&(*dataptr)[0], len) << std::endl;
+		std::cout << __LINE__ << " hello:" << *nameptr << std::endl;
 		system::error_code error;
-		auto connptr = std::make_shared<connection>(s.get_io_service(), s.local_endpoint(error), *endptr);
-		connptr->start();
-		start_service(s);
+		auto local_endpoint(s.local_endpoint(error));
+		if( error ){
+			std::cerr << __LINE__ << " error:" << error.message() << std::endl;
+			return;
+		}
+		auto connptr = std::make_shared<connection>(nameptr->data(), s.get_io_service(), local_endpoint, *endptr);
+		if( connptr->start() ){
+			login(connptr);
+		}
 	});
 }
 void RunServer(int port)
@@ -89,34 +144,53 @@ void RunServer(int port)
 	start_service(listensocket);
 	io_service.run();
 }
+
+void client_recv(udp::socket& clientsocket)
+{
+	std::array<char, 1024> buf;
+	system::error_code ec;
+	while(1)
+	{
+		buf.fill(0);
+		clientsocket.receive(asio::buffer(buf), 0, ec);
+		if( ec ){
+			std::cerr << __LINE__ << " receive error:" << ec.message() << std::endl;
+			return;
+		}
+		std::cout << buf.data() << std::endl;
+	}
+}
+
 void RunClient(const std::string& host, int port)
 {
 	asio::io_service io_service;
 	udp::socket clientsocket(io_service, udp::v4());
 	clientsocket.set_option(asio::socket_base::reuse_address(true));
 	system::error_code ec;
-	udp::endpoint remotepoint(asio::ip::address::from_string(host), port);
-	//std::cout << "remotepoint:" << remotepoint.address().to_string() << ":" << remotepoint.port() << std::endl;
-	clientsocket.connect(remotepoint, ec);
+	udp::endpoint serverpoint(asio::ip::address::from_string(host), port);
+	clientsocket.connect(serverpoint, ec);
 	if( ec ){
 		std::cerr << __LINE__ << " conncet error:" << ec.message() << std::endl;
 		return;
 	}
-	std::string s = "hello world";
-	size_t len = clientsocket.send(asio::buffer(&s[0], s.size()), 0, ec);
+	std::array<char, 1024> buf;
+	std::cout << "input a name:\n";
+	std::cin.getline(buf.data(), buf.size());
+	size_t len = clientsocket.send(asio::buffer(buf.data(), strlen(buf.data())), 0, ec);
 	if( ec ){
 		std::cerr << __LINE__ << "  send error:" << ec.message() << std::endl;
 		return;
 	}
-	std::array<char, 1024> buf;
+	buf.fill(0);
 	len =  clientsocket.receive(asio::buffer(buf), 0, ec);
 	if( ec ){
 		std::cerr << __LINE__ << " receive error:" << ec.message() << std::endl;
 		return;
 	}
 	std::cout << "receive first data from server:" << buf.data() << std::endl;
+	std::thread recvthread(client_recv, std::ref(clientsocket));
+	std::cout << "input:\n";
 	while(1){
-		std::cout << "input:";
 		buf.fill(0);
 		std::cin.getline(buf.data(), buf.size());
 		clientsocket.send(asio::buffer(buf.data(), strlen(buf.data())), 0, ec);
@@ -124,13 +198,6 @@ void RunClient(const std::string& host, int port)
 			std::cerr << __LINE__ << " send error:" << ec.message() << std::endl;
 			return;
 		}
-		buf.fill(0);
-		clientsocket.receive(asio::buffer(buf), 0, ec);
-		if( ec ){
-			std::cerr << __LINE__ << " receive error:" << ec.message() << std::endl;
-			return;
-		}
-		std::cout << "receive:" << buf.data() << std::endl;
 	}
 }
 
@@ -156,7 +223,7 @@ int main(int argc, char** argv)
 				break;
 			case '?':
 			default:
-				std::cout << argv[0] << " -[sc] -p port\n";
+				std::cout << argv[0] << " -[sc] -h host -p port\n";
 				return 0;
 		}
 	}
