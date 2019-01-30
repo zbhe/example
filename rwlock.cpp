@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <ctime>
+#include <assert.h>
 using namespace std;
 struct FlagLock{
 	atomic_flag Flag = ATOMIC_FLAG_INIT;
@@ -23,44 +24,31 @@ struct FlagLock{
 		//Lock.unlock();
 	}
 };
-#define USE_RW_LOCK
 struct RWLock{
-	int ReaderCount;
+	int ReaderCount = 0;
 	mutex WriteLock;
 	FlagLock OpLock;
 	void LockRead()
 	{
-#ifdef USE_RW_LOCK
 		OpLock.lock();
 		ReaderCount++;
 		if( ReaderCount == 1 ){
 			WriteLock.lock();
 		}
 		OpLock.unlock();
-#else
-		WriteLock.lock();
-#endif
 	}
 	void UnlockRead()
 	{
-#ifdef USE_RW_LOCK
 		OpLock.lock();
 		ReaderCount--;
 		if( ReaderCount == 0 ){
 			WriteLock.unlock();
 		}
 		OpLock.unlock();
-#else
-		WriteLock.unlock();
-#endif
 	}
 	void LockWrite()
 	{
-#ifdef USE_RW_LOCK
 		WriteLock.lock();
-#else
-		WriteLock.lock();
-#endif
 	}
 	void UnlockWrite()
 	{
