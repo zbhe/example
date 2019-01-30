@@ -28,13 +28,9 @@ struct RWLock{
 	int ReaderCount;
 	mutex WriteLock;
 	FlagLock OpLock;
-	//mutex OpLock;
-	FlagLock PrefLock;
 	void LockRead()
 	{
 #ifdef USE_RW_LOCK
-		PrefLock.lock();
-		PrefLock.unlock();
 		OpLock.lock();
 		ReaderCount++;
 		if( ReaderCount == 1 ){
@@ -61,8 +57,6 @@ struct RWLock{
 	void LockWrite()
 	{
 #ifdef USE_RW_LOCK
-		PrefLock.lock();
-		PrefLock.unlock();
 		WriteLock.lock();
 #else
 		WriteLock.lock();
@@ -73,6 +67,7 @@ struct RWLock{
 		WriteLock.unlock();
 	}
 };
+
 using MAPTYPE = unordered_map<int, vector<int> >;
 atomic<bool> Reading{false};
 bool Insert(MAPTYPE& Map)
